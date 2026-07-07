@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 .claude/**
+.github/**
 src/**
 test/**
 out/**
@@ -10,5 +11,7 @@ node_modules/**
 .vscodeignore
 tsconfig.json
 tsconfig.test.json
+images/icon.svg
+images/README.md
 **/*.map
 **/*.vsix

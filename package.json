@@ -2,9 +2,10 @@
   "name": "flutter-folder-lens",
   "displayName": "Flutter Folder Lens",
   "description": "Instantly scannable Flutter project structure — colored badges on lib/screens, widgets, models, providers, services, tests and platform folders in the Explorer.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "JashwanthNeela",
   "license": "MIT",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
