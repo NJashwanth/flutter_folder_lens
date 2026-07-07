@@ -1,0 +1,14 @@
+.vscode/**
+.vscode-test/**
+.claude/**
+src/**
+test/**
+out/**
+sample-workspace/**
+node_modules/**
+.gitignore
+.vscodeignore
+tsconfig.json
+tsconfig.test.json
+**/*.map
+**/*.vsix

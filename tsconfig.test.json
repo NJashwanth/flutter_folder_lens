@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false
+  },
+  "include": ["src/rules.ts", "src/pubspec.ts", "test/**/*.ts"]
+}
