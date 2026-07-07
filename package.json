@@ -1,8 +1,8 @@
 {
   "name": "flutter-folder-lens",
   "displayName": "Flutter Folder Lens",
-  "description": "Instantly scannable Flutter project structure — colored badges on lib/screens, widgets, models, providers, services, tests and platform folders in the Explorer.",
-  "version": "0.1.1",
+  "description": "Flutter-aware file icon theme — colored, shape-based folder icons for screens, widgets, models, state management, services, tests and platform folders.",
+  "version": "0.2.0",
   "publisher": "JashwanthNeela",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -10,6 +10,7 @@
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Themes",
     "Visualization",
     "Other"
   ],
@@ -19,8 +20,9 @@
     "folder",
     "colors",
     "explorer",
+    "icons",
+    "icon theme",
     "decorations",
-    "badges",
     "project structure"
   ],
   "repository": {
@@ -31,31 +33,38 @@
     "url": "https://github.com/NJashwanth/flutter_folder_lens/issues"
   },
   "activationEvents": [
-    "workspaceContains:pubspec.yaml"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "iconThemes": [
+      {
+        "id": "flutter-folder-lens",
+        "label": "Flutter Folder Lens",
+        "path": "./theme/flutter-folder-lens-icon-theme.json"
+      }
+    ],
     "commands": [
       {
-        "command": "flutterFolderLens.assignBadge",
-        "title": "Assign Badge to Folder",
+        "command": "flutterFolderLens.setIconForFolder",
+        "title": "Set Icon for Folder…",
         "category": "Flutter Folder Lens"
       },
       {
-        "command": "flutterFolderLens.refresh",
-        "title": "Refresh Decorations",
+        "command": "flutterFolderLens.regenerateIcons",
+        "title": "Regenerate Icons",
         "category": "Flutter Folder Lens"
       },
       {
-        "command": "flutterFolderLens.toggle",
-        "title": "Toggle On/Off",
+        "command": "flutterFolderLens.resetToDefaults",
+        "title": "Reset to Defaults",
         "category": "Flutter Folder Lens"
       }
     ],
     "menus": {
       "explorer/context": [
         {
-          "command": "flutterFolderLens.assignBadge",
+          "command": "flutterFolderLens.setIconForFolder",
           "when": "explorerResourceIsFolder",
           "group": "7_modification@100"
         }
@@ -64,146 +73,67 @@
     "configuration": {
       "title": "Flutter Folder Lens",
       "properties": {
-        "flutterFolderLens.enabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable or disable all folder decorations."
-        },
         "flutterFolderLens.useDefaultRules": {
           "type": "boolean",
           "default": true,
-          "description": "Apply the built-in rules for common Flutter folder conventions. Disable to use only your own rules."
+          "description": "Apply the built-in icon rules for common Flutter folder conventions. Disable to use only your own rules."
         },
         "flutterFolderLens.rules": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Custom decoration rules, matched against workspace-relative folder paths. Rules listed here take priority over the built-in defaults.",
+          "markdownDescription": "Custom folder-icon rules, merged over (and winning against) the defaults. Icon themes match by **folder name only** — path targeting like `lib/models` is not possible.",
           "items": {
             "type": "object",
             "required": [
-              "glob",
-              "badge"
+              "folderName",
+              "shape",
+              "color"
             ],
             "properties": {
-              "glob": {
+              "folderName": {
                 "type": "string",
-                "description": "Glob matched against the workspace-relative folder path, e.g. `lib/**/screens` or `packages/*/lib/models`."
+                "description": "Folder basename to match anywhere in the tree, e.g. `genkit`."
               },
-              "badge": {
+              "shape": {
                 "type": "string",
-                "maxLength": 2,
-                "description": "Badge shown on the folder (max 2 characters), e.g. `▢` or `UI`."
+                "enum": [
+                  "circle",
+                  "square",
+                  "triangle",
+                  "diamond",
+                  "hexagon",
+                  "star",
+                  "shield",
+                  "grid",
+                  "gear",
+                  "folder"
+                ],
+                "description": "Icon shape from the built-in library."
               },
               "color": {
                 "type": "string",
-                "description": "Theme color id, e.g. `flutterFolderLens.blue` or any color id like `charts.red`.",
-                "default": "flutterFolderLens.blue"
+                "description": "Palette name (blue, cyan, orange, purple, teal, gray, green, yellow, red, dimmed, …) or a #rrggbb hex color.",
+                "default": "blue"
               }
             }
           }
+        },
+        "flutterFolderLens.baseIconTheme": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Icon theme to use as the base under the Flutter folder overrides. Empty = the built-in minimal set. `auto` = import the icon theme that was active before Flutter Folder Lens. Or any icon theme id (e.g. `material-icon-theme`, `vs-seti`). The base extension must stay installed."
         }
       }
-    },
-    "colors": [
-      {
-        "id": "flutterFolderLens.blue",
-        "description": "Flutter Folder Lens: screens / pages",
-        "defaults": {
-          "dark": "#4FC1FF",
-          "light": "#0969DA",
-          "highContrast": "#4FC1FF",
-          "highContrastLight": "#0969DA"
-        }
-      },
-      {
-        "id": "flutterFolderLens.cyan",
-        "description": "Flutter Folder Lens: widgets",
-        "defaults": {
-          "dark": "#3BC9DB",
-          "light": "#1B7C83",
-          "highContrast": "#3BC9DB",
-          "highContrastLight": "#1B7C83"
-        }
-      },
-      {
-        "id": "flutterFolderLens.orange",
-        "description": "Flutter Folder Lens: models",
-        "defaults": {
-          "dark": "#F2994A",
-          "light": "#BC4C00",
-          "highContrast": "#F2994A",
-          "highContrastLight": "#BC4C00"
-        }
-      },
-      {
-        "id": "flutterFolderLens.purple",
-        "description": "Flutter Folder Lens: state management (providers / bloc / cubit / riverpod)",
-        "defaults": {
-          "dark": "#C586C0",
-          "light": "#8250DF",
-          "highContrast": "#C586C0",
-          "highContrastLight": "#8250DF"
-        }
-      },
-      {
-        "id": "flutterFolderLens.teal",
-        "description": "Flutter Folder Lens: services / repositories / data",
-        "defaults": {
-          "dark": "#4EC9B0",
-          "light": "#1A7F6B",
-          "highContrast": "#4EC9B0",
-          "highContrastLight": "#1A7F6B"
-        }
-      },
-      {
-        "id": "flutterFolderLens.gray",
-        "description": "Flutter Folder Lens: utils / helpers / core",
-        "defaults": {
-          "dark": "#9DA5B4",
-          "light": "#6E7781",
-          "highContrast": "#9DA5B4",
-          "highContrastLight": "#6E7781"
-        }
-      },
-      {
-        "id": "flutterFolderLens.green",
-        "description": "Flutter Folder Lens: tests",
-        "defaults": {
-          "dark": "#89D185",
-          "light": "#1A7F37",
-          "highContrast": "#89D185",
-          "highContrastLight": "#1A7F37"
-        }
-      },
-      {
-        "id": "flutterFolderLens.yellow",
-        "description": "Flutter Folder Lens: assets",
-        "defaults": {
-          "dark": "#E2C08D",
-          "light": "#9A6700",
-          "highContrast": "#E2C08D",
-          "highContrastLight": "#9A6700"
-        }
-      },
-      {
-        "id": "flutterFolderLens.dimmed",
-        "description": "Flutter Folder Lens: platform folders (android, ios, web, ...)",
-        "defaults": {
-          "dark": "#6B7280",
-          "light": "#A3A9B1",
-          "highContrast": "#6B7280",
-          "highContrastLight": "#A3A9B1"
-        }
-      }
-    ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run check && npm run bundle",
     "check": "tsc --noEmit -p ./",
-    "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
-    "compile": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "generate-theme": "esbuild src/generate-cli.ts --bundle --platform=node --format=cjs --outfile=out/generate-cli.cjs && node out/generate-cli.cjs",
+    "bundle": "npm run generate-theme && esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
+    "compile": "npm run generate-theme && esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
     "watch": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
-    "pretest": "tsc -p ./tsconfig.test.json",
+    "pretest": "rm -rf out && tsc -p ./tsconfig.test.json",
     "test": "node --test out/test/",
     "package": "vsce package"
   },
@@ -213,8 +143,5 @@
     "@vscode/vsce": "^3.2.1",
     "esbuild": "^0.24.0",
     "typescript": "^5.6.0"
-  },
-  "dependencies": {
-    "minimatch": "^9.0.5"
   }
 }

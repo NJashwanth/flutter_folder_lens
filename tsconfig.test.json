@@ -3,5 +3,5 @@
   "compilerOptions": {
     "noEmit": false
   },
-  "include": ["src/rules.ts", "src/pubspec.ts", "test/**/*.ts"]
+  "include": ["src/shapes.ts", "src/theme.ts", "src/writeTheme.ts", "test/**/*.ts"]
 }

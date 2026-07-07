@@ -1,213 +1,251 @@
+import * as fs from "fs";
+import * as path from "path";
 import * as vscode from "vscode";
-import { Rule, RuleEngine, clampBadge, normalizePath } from "./rules";
-import { isFlutterPubspec } from "./pubspec";
+import { SHAPE_IDS, ShapeId } from "./shapes";
+import { BaseTheme, IconRule, PALETTE, generateTheme, mergeRules } from "./theme";
+import { writeThemeFiles } from "./writeTheme";
 
 const CONFIG_SECTION = "flutterFolderLens";
+const THEME_ID = "flutter-folder-lens";
+const STATE_ACTIVATE_PROMPTED = "ffl.activatePrompted";
+const STATE_LAST_BASE_THEME = "ffl.lastBaseTheme";
 
-/** Badge presets offered by the "Assign Badge to Folder" command. */
-const BADGE_PRESETS = ["▢", "▲", "◆", "●", "⬡", "✦", "✓", "▣", "★", "♥", "⚑", "◈"];
+const SHAPE_LABELS: Record<ShapeId, string> = {
+  circle: "Circle — state management",
+  square: "Square — screens / pages",
+  triangle: "Triangle — widgets",
+  diamond: "Diamond — models",
+  hexagon: "Hexagon — services / data",
+  star: "Star — utils / core",
+  shield: "Shield (check) — tests",
+  grid: "Grid — assets",
+  gear: "Gear — generated code",
+  folder: "Folder — plain tinted folder",
+};
 
-const COLOR_PRESETS: Array<{ label: string; id: string }> = [
-  { label: "Blue", id: "flutterFolderLens.blue" },
-  { label: "Cyan", id: "flutterFolderLens.cyan" },
-  { label: "Orange", id: "flutterFolderLens.orange" },
-  { label: "Purple", id: "flutterFolderLens.purple" },
-  { label: "Teal", id: "flutterFolderLens.teal" },
-  { label: "Gray", id: "flutterFolderLens.gray" },
-  { label: "Green", id: "flutterFolderLens.green" },
-  { label: "Yellow", id: "flutterFolderLens.yellow" },
-  { label: "Dimmed", id: "flutterFolderLens.dimmed" },
-];
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
-class FolderLensProvider implements vscode.FileDecorationProvider {
-  private readonly changeEmitter = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();
-  readonly onDidChangeFileDecorations = this.changeEmitter.event;
-
-  private engine = new RuleEngine([]);
-  private enabled = true;
-  /** fsPaths of workspace folders whose pubspec.yaml declares Flutter. */
-  private flutterRoots: string[] = [];
-
-  reload(): void {
-    const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-    this.enabled = config.get<boolean>("enabled", true);
-    const userRules = config.get<Rule[]>("rules", []);
-    const useDefaults = config.get<boolean>("useDefaultRules", true);
-    this.engine = new RuleEngine(userRules, useDefaults);
-  }
-
-  setFlutterRoots(roots: string[]): void {
-    this.flutterRoots = roots;
-  }
-
-  get hasFlutterRoots(): boolean {
-    return this.flutterRoots.length > 0;
-  }
-
-  refresh(): void {
-    this.changeEmitter.fire(undefined);
-  }
-
-  dispose(): void {
-    this.changeEmitter.dispose();
-  }
-
-  async provideFileDecoration(uri: vscode.Uri): Promise<vscode.FileDecoration | undefined> {
-    if (!this.enabled || uri.scheme !== "file") {
-      return undefined;
-    }
-    const relative = this.toFlutterRelativePath(uri.fsPath);
-    if (relative === undefined) {
-      return undefined;
-    }
-    const match = this.engine.resolve(relative);
-    if (!match) {
-      return undefined;
-    }
-    // Rules describe folders; skip the rare file that shares a folder-like
-    // path. The stat only runs for matched paths, so it stays cheap.
-    try {
-      const stat = await vscode.workspace.fs.stat(uri);
-      if ((stat.type & vscode.FileType.Directory) === 0) {
-        return undefined;
-      }
-    } catch {
-      return undefined;
-    }
-    return {
-      badge: match.badge,
-      color: new vscode.ThemeColor(match.color),
-      tooltip: "Flutter Folder Lens",
-      propagate: false,
-    };
-  }
-
-  private toFlutterRelativePath(fsPath: string): string | undefined {
-    const path = normalizePath(fsPath);
-    for (const root of this.flutterRoots) {
-      if (path.startsWith(root + "/")) {
-        return path.slice(root.length + 1);
-      }
-    }
-    return undefined;
-  }
-}
-
-async function detectFlutterRoots(): Promise<string[]> {
-  const roots: string[] = [];
-  for (const folder of vscode.workspace.workspaceFolders ?? []) {
-    if (folder.uri.scheme !== "file") {
-      continue;
-    }
-    try {
-      const pubspec = vscode.Uri.joinPath(folder.uri, "pubspec.yaml");
-      const bytes = await vscode.workspace.fs.readFile(pubspec);
-      if (isFlutterPubspec(new TextDecoder().decode(bytes))) {
-        roots.push(normalizePath(folder.uri.fsPath));
-      }
-    } catch {
-      // no pubspec.yaml in this folder
-    }
-  }
-  return roots;
-}
-
-export async function activate(context: vscode.ExtensionContext): Promise<void> {
-  const provider = new FolderLensProvider();
-  provider.reload();
-  provider.setFlutterRoots(await detectFlutterRoots());
-  context.subscriptions.push(provider);
-
-  // Only pay for the decoration provider in actual Flutter workspaces; a
-  // pure-Dart pubspec.yaml activates us but registers nothing beyond commands.
-  let providerRegistration: vscode.Disposable | undefined;
-  const syncRegistration = () => {
-    if (provider.hasFlutterRoots && !providerRegistration) {
-      providerRegistration = vscode.window.registerFileDecorationProvider(provider);
-      context.subscriptions.push(providerRegistration);
-    }
-  };
-  syncRegistration();
+export function activate(context: vscode.ExtensionContext): void {
+  regenerate(context, { announce: false }).then(() => maybePromptActivation(context));
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_SECTION)) {
-        provider.reload();
-        provider.refresh();
+        void regenerate(context, { announce: false });
+      }
+      if (e.affectsConfiguration("workbench.iconTheme")) {
+        rememberBaseTheme(context);
       }
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(async () => {
-      provider.setFlutterRoots(await detectFlutterRoots());
-      syncRegistration();
-      provider.refresh();
-    }),
-    vscode.commands.registerCommand("flutterFolderLens.refresh", async () => {
-      provider.setFlutterRoots(await detectFlutterRoots());
-      syncRegistration();
-      provider.reload();
-      provider.refresh();
-    }),
-    vscode.commands.registerCommand("flutterFolderLens.toggle", async () => {
-      const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-      const enabled = config.get<boolean>("enabled", true);
-      const target = vscode.workspace.workspaceFolders?.length
-        ? vscode.ConfigurationTarget.Workspace
-        : vscode.ConfigurationTarget.Global;
-      await config.update("enabled", !enabled, target);
-      vscode.window.setStatusBarMessage(
-        `Flutter Folder Lens: ${enabled ? "off" : "on"}`,
-        3000,
-      );
-    }),
-    vscode.commands.registerCommand("flutterFolderLens.assignBadge", (uri?: vscode.Uri) =>
-      assignBadge(uri),
+    vscode.commands.registerCommand("flutterFolderLens.setIconForFolder", (uri?: vscode.Uri) =>
+      setIconForFolder(uri),
     ),
+    vscode.commands.registerCommand("flutterFolderLens.regenerateIcons", () =>
+      regenerate(context, { announce: true }),
+    ),
+    vscode.commands.registerCommand("flutterFolderLens.resetToDefaults", () => resetToDefaults()),
   );
 }
 
-async function assignBadge(uri?: vscode.Uri): Promise<void> {
-  const glob = await resolveGlobForTarget(uri);
-  if (!glob) {
+/** Track the most recent non-FFL icon theme so baseIconTheme:"auto" has a target. */
+function rememberBaseTheme(context: vscode.ExtensionContext): void {
+  const current = vscode.workspace.getConfiguration("workbench").get<string>("iconTheme");
+  if (current && current !== THEME_ID) {
+    void context.globalState.update(STATE_LAST_BASE_THEME, current);
+  }
+}
+
+interface RegenerateOptions {
+  /** Show a status message even when nothing changed (manual command). */
+  announce: boolean;
+}
+
+async function regenerate(context: vscode.ExtensionContext, options: RegenerateOptions): Promise<void> {
+  rememberBaseTheme(context);
+  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  const rules = mergeRules(config.get("rules", []), config.get<boolean>("useDefaultRules", true));
+  const themeDir = path.join(context.extensionUri.fsPath, "theme");
+
+  let base: BaseTheme | undefined;
+  const baseSetting = (config.get<string>("baseIconTheme", "") ?? "").trim();
+  if (baseSetting) {
+    base = loadBaseTheme(context, baseSetting, themeDir);
+    if (!base) {
+      void vscode.window.showWarningMessage(
+        `Flutter Folder Lens: could not load base icon theme "${baseSetting}"; using the built-in base instead.`,
+      );
+    }
+  }
+
+  let changed: boolean;
+  try {
+    changed = writeThemeFiles(themeDir, generateTheme(rules, base));
+  } catch (err) {
+    void vscode.window.showErrorMessage(`Flutter Folder Lens: failed to generate icons — ${String(err)}`);
     return;
   }
 
-  const badgePick = await vscode.window.showQuickPick(
-    [
-      ...BADGE_PRESETS.map((b) => ({ label: b, description: "" })),
-      { label: "Custom…", description: "Type your own badge (max 2 characters)" },
-    ],
-    { placeHolder: `Badge for "${glob}"` },
-  );
-  if (!badgePick) {
+  if (changed) {
+    const active = vscode.workspace.getConfiguration("workbench").get<string>("iconTheme") === THEME_ID;
+    if (active) {
+      const pick = await vscode.window.showInformationMessage(
+        "Flutter Folder Lens icons were updated. Reload the window to apply them.",
+        "Reload Window",
+      );
+      if (pick === "Reload Window") {
+        void vscode.commands.executeCommand("workbench.action.reloadWindow");
+      }
+    }
+  } else if (options.announce) {
+    vscode.window.setStatusBarMessage("Flutter Folder Lens: icons are up to date.", 3000);
+  }
+}
+
+/**
+ * Resolve a base icon theme by id ("auto" = the icon theme that was active
+ * before ours). Returns the parsed theme JSON plus the relative path prefix
+ * from our theme dir to that theme's directory, so icon paths keep working.
+ */
+function loadBaseTheme(
+  context: vscode.ExtensionContext,
+  setting: string,
+  themeDir: string,
+): BaseTheme | undefined {
+  let themeId = setting;
+  if (setting === "auto") {
+    const current = vscode.workspace.getConfiguration("workbench").get<string>("iconTheme");
+    themeId =
+      current && current !== THEME_ID
+        ? current
+        : (context.globalState.get<string>(STATE_LAST_BASE_THEME) ?? "");
+  }
+  if (!themeId || themeId === THEME_ID) {
+    return undefined;
+  }
+  for (const ext of vscode.extensions.all) {
+    const themes = (ext.packageJSON?.contributes?.iconThemes ?? []) as Array<{ id?: string; path?: string }>;
+    const match = themes.find((t) => t.id === themeId && typeof t.path === "string");
+    if (!match) {
+      continue;
+    }
+    const themeFile = path.join(ext.extensionUri.fsPath, match.path as string);
+    try {
+      const json = JSON.parse(stripJsonComments(fs.readFileSync(themeFile, "utf8"))) as Record<string, unknown>;
+      const prefix = path.relative(themeDir, path.dirname(themeFile)).split(path.sep).join("/");
+      return { json, pathPrefix: prefix };
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Theme files are JSONC: strip // and block comments plus trailing commas. */
+function stripJsonComments(text: string): string {
+  let out = "";
+  let inString = false;
+  let inLine = false;
+  let inBlock = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (inLine) {
+      if (ch === "\n") {
+        inLine = false;
+        out += ch;
+      }
+      continue;
+    }
+    if (inBlock) {
+      if (ch === "*" && next === "/") {
+        inBlock = false;
+        i++;
+      }
+      continue;
+    }
+    if (inString) {
+      out += ch;
+      if (ch === "\\") {
+        out += next ?? "";
+        i++;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      out += ch;
+    } else if (ch === "/" && next === "/") {
+      inLine = true;
+      i++;
+    } else if (ch === "/" && next === "*") {
+      inBlock = true;
+      i++;
+    } else {
+      out += ch;
+    }
+  }
+  return out.replace(/,\s*([}\]])/g, "$1");
+}
+
+async function maybePromptActivation(context: vscode.ExtensionContext): Promise<void> {
+  const workbench = vscode.workspace.getConfiguration("workbench");
+  if (workbench.get<string>("iconTheme") === THEME_ID || context.globalState.get(STATE_ACTIVATE_PROMPTED)) {
     return;
   }
-  let badge = badgePick.label;
-  if (badge === "Custom…") {
-    const input = await vscode.window.showInputBox({
-      prompt: "Badge text (max 2 characters)",
-      validateInput: (v) => (v.trim() ? undefined : "Badge cannot be empty"),
+  await context.globalState.update(STATE_ACTIVATE_PROMPTED, true);
+  const pick = await vscode.window.showInformationMessage(
+    "Flutter Folder Lens now provides a file icon theme with Flutter-role folder icons. Activate it?",
+    "Activate",
+    "Not Now",
+  );
+  if (pick === "Activate") {
+    rememberBaseTheme(context);
+    await workbench.update("iconTheme", THEME_ID, vscode.ConfigurationTarget.Global);
+  }
+}
+
+async function setIconForFolder(uri?: vscode.Uri): Promise<void> {
+  let folderName: string | undefined;
+  if (uri) {
+    folderName = path.basename(uri.fsPath);
+  } else {
+    folderName = await vscode.window.showInputBox({
+      prompt: "Folder name to assign an icon to (matched by name anywhere, not by path)",
+      placeHolder: "genkit",
+      validateInput: (v) => (v.trim() && !v.includes("/") && !v.includes("\\") ? undefined : "Enter a plain folder name"),
     });
-    if (!input) {
-      return;
-    }
-    badge = clampBadge(input.trim());
+  }
+  if (!folderName) {
+    return;
+  }
+  folderName = folderName.trim().toLowerCase();
+
+  const shapePick = await vscode.window.showQuickPick(
+    SHAPE_IDS.map((id) => ({ label: id, description: SHAPE_LABELS[id] })),
+    { placeHolder: `Icon shape for "${folderName}" folders` },
+  );
+  if (!shapePick) {
+    return;
   }
 
   const colorPick = await vscode.window.showQuickPick(
     [
-      ...COLOR_PRESETS.map((c) => ({ label: c.label, description: c.id })),
-      { label: "Other theme color…", description: "Any theme color id, e.g. charts.red" },
+      ...Object.keys(PALETTE).map((name) => ({ label: name, description: PALETTE[name].dark })),
+      { label: "Custom…", description: "Hex color, e.g. #E53935" },
     ],
-    { placeHolder: "Badge color" },
+    { placeHolder: "Icon color" },
   );
   if (!colorPick) {
     return;
   }
-  let color = colorPick.description ?? "";
-  if (colorPick.label === "Other theme color…") {
+  let color = colorPick.label;
+  if (color === "Custom…") {
     const input = await vscode.window.showInputBox({
-      prompt: "Theme color id",
-      value: "charts.red",
+      prompt: "Hex color",
+      value: "#E53935",
+      validateInput: (v) => (HEX_RE.test(v.trim()) ? undefined : "Use #rrggbb format"),
     });
     if (!input) {
       return;
@@ -216,42 +254,37 @@ async function assignBadge(uri?: vscode.Uri): Promise<void> {
   }
 
   const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
-  const rules = [...config.get<Rule[]>("rules", [])];
-  const existing = rules.findIndex((r) => r?.glob === glob);
-  const rule: Rule = { glob, badge, color };
+  const rules = [...config.get<IconRule[]>("rules", [])];
+  const existing = rules.findIndex(
+    (r) => r && typeof r.folderName === "string" && r.folderName.trim().toLowerCase() === folderName,
+  );
+  const rule: IconRule = { folderName, shape: shapePick.label as ShapeId, color };
   if (existing >= 0) {
     rules[existing] = rule;
   } else {
     rules.push(rule);
   }
-  const target = vscode.workspace.workspaceFolders?.length
-    ? vscode.ConfigurationTarget.Workspace
-    : vscode.ConfigurationTarget.Global;
-  await config.update("rules", rules, target);
-  vscode.window.setStatusBarMessage(`Flutter Folder Lens: ${badge} assigned to ${glob}`, 3000);
+  // Icon themes are window-global, so rules persist globally too — a
+  // workspace-scoped rule would rewrite the shared theme on every window switch.
+  await config.update("rules", rules, vscode.ConfigurationTarget.Global);
 }
 
-async function resolveGlobForTarget(uri?: vscode.Uri): Promise<string | undefined> {
-  if (uri) {
-    const folder = vscode.workspace.getWorkspaceFolder(uri);
-    if (!folder) {
-      void vscode.window.showWarningMessage("Folder is outside the current workspace.");
-      return undefined;
-    }
-    const root = normalizePath(folder.uri.fsPath);
-    const target = normalizePath(uri.fsPath);
-    if (target === root) {
-      void vscode.window.showWarningMessage("Pick a folder inside the workspace root.");
-      return undefined;
-    }
-    return target.slice(root.length + 1);
+async function resetToDefaults(): Promise<void> {
+  const pick = await vscode.window.showWarningMessage(
+    "Reset Flutter Folder Lens to its default icons? This removes all custom rules.",
+    { modal: true },
+    "Reset",
+  );
+  if (pick !== "Reset") {
+    return;
   }
-  // Invoked from the command palette: ask for the glob directly.
-  return vscode.window.showInputBox({
-    prompt: "Folder path or glob to decorate (workspace-relative)",
-    placeHolder: "lib/features/**/screens",
-    validateInput: (v) => (v.trim() ? undefined : "Enter a folder path or glob"),
-  });
+  const config = vscode.workspace.getConfiguration(CONFIG_SECTION);
+  for (const key of ["rules", "useDefaultRules", "baseIconTheme"]) {
+    await config.update(key, undefined, vscode.ConfigurationTarget.Global);
+    if (vscode.workspace.workspaceFolders?.length) {
+      await config.update(key, undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  }
 }
 
 export function deactivate(): void {

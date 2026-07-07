@@ -1,82 +1,98 @@
 # Flutter Folder Lens
 
-**Make your Flutter project structure instantly scannable.** Flutter Folder Lens decorates folders in the Explorer with colored badges based on their role — screens, widgets, models, state management, services, tests, assets and platform folders each get their own glyph and color.
+**Make your Flutter project structure instantly scannable.** Flutter Folder Lens is a Flutter-aware **file icon theme**: folders like `screens`, `widgets`, `models`, `bloc`, `services`, `test` and the platform directories get distinct colored, shape-based icons in the Explorer — like Material Icon Theme, but built around Flutter conventions.
 
 <!-- TODO: capture images/demo.gif and restore: ![Flutter Folder Lens in action](images/demo.gif) -->
-> 📸 Demo GIF coming soon — open the extension on any Flutter project to see the badges below in action.
+> 📸 Demo GIF coming soon — activate the theme on any Flutter project to see the icons below in action.
 
-## Why
+## Getting started
 
-Large Flutter apps — especially feature-first layouts and monorepos — repeat the same folder names (`screens`, `widgets`, `models`, `bloc`, …) dozens of times. Folder Lens turns those conventions into visual anchors so you can navigate the Explorer at a glance.
+1. Install the extension. On first run it offers to activate the icon theme.
+2. Or activate manually: **Preferences: File Icon Theme** → **Flutter Folder Lens** (this sets `workbench.iconTheme`).
 
-> VS Code's decoration API supports a **badge (up to 2 characters) and a theme color** per item. Actual folder-icon recoloring is not exposed to extensions, so Folder Lens gives you the closest thing that works everywhere: crisp, theme-aware badges.
+Because VS Code applies exactly one file icon theme at a time, Flutter Folder Lens must be your active icon theme for its icons to show. If you love your current theme, see [Using another theme as the base](#using-another-icon-theme-as-the-base).
 
-## Default decorations
+## Default folder icons
 
-| Folder (anywhere under `lib/`) | Badge | Color |
-| --- | :---: | --- |
-| `screens`, `pages` | ▢ | blue |
-| `widgets` | ▲ | cyan |
-| `models` | ◆ | orange |
-| `providers`, `bloc`, `cubit`, `riverpod` | ● | purple |
-| `services`, `repositories`, `data` | ⬡ | teal |
-| `utils`, `helpers`, `core` | ✦ | gray |
+| Folder name | Icon |
+| --- | --- |
+| `screens`, `pages` | blue rounded square |
+| `widgets` | cyan triangle |
+| `models` | orange diamond |
+| `providers`, `bloc`, `cubit`, `state`, `riverpod` | purple circle |
+| `services`, `repositories`, `data`, `api` | teal hexagon |
+| `utils`, `helpers`, `core` | gray star |
+| `test`, `tests`, `test_driver`, `integration_test` | green check-shield |
+| `assets`, `images`, `fonts` | yellow grid |
+| `android`, `ios`, `web`, `macos`, `windows`, `linux` | platform-tinted folders |
+| `l10n`, `generated` | dimmed gear |
 
-| Folder (project level) | Badge | Color |
-| --- | :---: | --- |
-| `test`, `test_driver`, `integration_test` | ✓ | green |
-| `assets` | ▣ | yellow |
-| `android` / `ios` / `web` / `macos` / `windows` / `linux` | 🤖 🍎 🌐 💻 🪟 🐧 | dimmed |
+Every icon has closed and expanded (open) variants, is drawn on a crisp 16px grid, and palette colors ship separate dark- and light-theme fills.
 
-Nested matches work everywhere: `lib/features/auth/screens` and `packages/my_app/lib/models` are decorated just like their top-level counterparts.
-
-All colors are [contributed theme colors](https://code.visualstudio.com/api/references/theme-color), so they adapt to light, dark and high-contrast themes — and you can override any of them in `workbench.colorCustomizations` (e.g. `flutterFolderLens.blue`).
-
-## Zero overhead outside Flutter
-
-The extension activates only when the workspace contains a `pubspec.yaml` that declares a `flutter` dependency (or a `flutter:` section). No pubspec, no Flutter → nothing runs. There is no polling and no file watching; decorations are resolved on demand by VS Code, so it stays instant even in large monorepos.
+> **Name-only matching.** VS Code icon themes match folders by *name*, not by path — `models` gets its icon whether it's `lib/models` or `packages/app/lib/models`, but you cannot scope a rule to `lib/models` only. This is a platform limitation of `folderNames` / `folderNamesExpanded`.
 
 ## Custom rules
 
-Right-click any folder → **Flutter Folder Lens: Assign Badge to Folder**, pick a badge and a color, and the rule is saved to your workspace settings. Or edit settings directly:
+Right-click any folder → **Flutter Folder Lens: Set Icon for Folder…**, pick a shape and color, done. Icons are regenerated and you'll be prompted to reload the window. Or edit settings directly:
 
 ```jsonc
 "flutterFolderLens.rules": [
-  { "glob": "lib/features/*/ui", "badge": "U", "color": "flutterFolderLens.cyan" },
-  { "glob": "lib/l10n",          "badge": "🌍", "color": "flutterFolderLens.green" },
+  { "folderName": "genkit",   "shape": "star",    "color": "red" },
+  { "folderName": "features", "shape": "hexagon", "color": "#7C4DFF" },
   // your rules always win over the built-in defaults
-  { "glob": "lib/screens",       "badge": "S",  "color": "charts.red" }
+  { "folderName": "screens",  "shape": "circle",  "color": "green" }
 ]
 ```
 
-- `glob` is matched against the workspace-relative folder path (`lib/**/screens`, `packages/*/test`, …).
-- `badge` is at most 2 characters (a VS Code limit).
-- `color` is any theme color id — the bundled `flutterFolderLens.*` palette or built-ins like `charts.red`.
+- **Shapes:** `circle`, `square`, `triangle`, `diamond`, `hexagon`, `star`, `shield`, `grid`, `gear`, `folder`.
+- **Colors:** palette names (`blue`, `cyan`, `orange`, `purple`, `teal`, `gray`, `green`, `yellow`, `red`, `dimmed`, platform tints) or any `#rrggbb` hex. SVGs are generated at runtime from shape templates, so custom colors need no bundled assets.
+- Set `"flutterFolderLens.useDefaultRules": false` to start from a blank slate.
 
-Want a fully custom scheme? Set `"flutterFolderLens.useDefaultRules": false` and only your rules apply.
+Rules persist in your **user settings** (icon themes are global to the window, so workspace-scoped rules would thrash the shared theme when switching projects).
 
-## Settings
+## Using another icon theme as the base
 
-| Setting | Default | Description |
-| --- | --- | --- |
-| `flutterFolderLens.enabled` | `true` | Master switch for all decorations. |
-| `flutterFolderLens.useDefaultRules` | `true` | Apply the built-in Flutter conventions. |
-| `flutterFolderLens.rules` | `[]` | Your rules; merged over (and winning against) the defaults. |
+By default the theme ships a clean minimal file/folder icon set. To keep your favorite theme's file icons and only layer the Flutter folder icons on top:
+
+```jsonc
+"flutterFolderLens.baseIconTheme": "material-icon-theme"   // or "vs-seti", or "auto"
+```
+
+`auto` imports whichever icon theme was active before you switched to Flutter Folder Lens. The base theme's extension must remain installed — its icons are referenced, not copied.
+
+## How it works (and why a reload prompt)
+
+The extension generates the icon theme JSON and SVG files into its own installation directory whenever your configuration changes, then prompts for a window reload — VS Code only reads icon theme files once. Generation is idempotent: unchanged configuration writes nothing and never prompts.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| **Flutter Folder Lens: Assign Badge to Folder** | Quick-pick a badge + color for a folder; persists to workspace settings. Also in the Explorer context menu. |
-| **Flutter Folder Lens: Refresh Decorations** | Re-reads settings and re-decorates. |
-| **Flutter Folder Lens: Toggle On/Off** | Flips `flutterFolderLens.enabled`. |
+| **Flutter Folder Lens: Set Icon for Folder…** | Quick-pick shape + color for a folder name; persists the rule to user settings. Also in the Explorer context menu. |
+| **Flutter Folder Lens: Regenerate Icons** | Force-regenerates the theme files. |
+| **Flutter Folder Lens: Reset to Defaults** | Removes all custom rules and settings. |
 
-Decorations also refresh automatically when settings or workspace folders change.
+## Settings
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `flutterFolderLens.rules` | `[]` | Custom `{folderName, shape, color}` rules, merged over the defaults. |
+| `flutterFolderLens.useDefaultRules` | `true` | Apply the built-in Flutter conventions. |
+| `flutterFolderLens.baseIconTheme` | `""` | Base icon theme id, `"auto"`, or empty for the built-in minimal set. |
+
+## Migrating from 0.1.x
+
+Version 0.1.x decorated folders with **badges** via the `FileDecorationProvider` API. That approach could only add a 2-character label next to the folder name — it could not change the folder icon itself. 0.2.0 replaces it entirely with a real icon theme:
+
+- The badge decorations, the `assignBadge`/`refresh`/`toggle` commands, the `flutterFolderLens.enabled` setting and the `flutterFolderLens.*` theme colors are **gone**.
+- Old `rules` entries in the `{glob, badge, color}` format are ignored (harmlessly) — recreate them as `{folderName, shape, color}`. Note the trade-off: badges matched full paths (`lib/**/screens`); icon themes match names only.
+- You must select the **Flutter Folder Lens** icon theme for anything to show — decorations worked on top of any theme, icons cannot.
 
 ## Notes & limitations
 
-- Badges share the decoration slot with other providers (Git, problems). VS Code merges them; when the slot is contested the badge may not always be yours.
-- Folder icons themselves cannot be recolored by extensions — badges + label color are the supported surface.
+- One icon theme at a time is a VS Code constraint; the `baseIconTheme` setting exists to soften it.
+- Matching is by folder basename only (see above).
+- After changing rules, a window reload is required for VS Code to pick up the regenerated theme.
 
 ## Release notes
 
