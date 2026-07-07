@@ -2,8 +2,8 @@
 
 **Make your Flutter project structure instantly scannable.** Flutter Folder Lens decorates folders in the Explorer with colored badges based on their role — screens, widgets, models, state management, services, tests, assets and platform folders each get their own glyph and color.
 
-<!-- TODO: replace with a real capture before publishing -->
-![Flutter Folder Lens in action](images/demo.gif)
+<!-- TODO: capture images/demo.gif and restore: ![Flutter Folder Lens in action](images/demo.gif) -->
+> 📸 Demo GIF coming soon — open the extension on any Flutter project to see the badges below in action.
 
 ## Why
 
