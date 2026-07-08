@@ -131,13 +131,13 @@ export function mergeRules(userRules: unknown, useDefaults: boolean): ResolvedRu
 }
 
 /**
- * A base icon theme to layer the Flutter overrides onto. `json` is the parsed
- * theme file of another extension; `pathPrefix` is the relative path from OUR
- * theme directory to THAT theme file's directory (icon paths get rewritten).
+ * A base icon theme to layer the Flutter overrides onto: the parsed theme
+ * file of another extension. Every asset it references (icons and fonts) is
+ * copied into our theme directory — VS Code won't reliably load resources
+ * from another extension's install location.
  */
 export interface BaseTheme {
   json: Record<string, unknown>;
-  pathPrefix: string;
 }
 
 /** A binary asset to copy from the base theme's directory into ours. */
@@ -154,9 +154,9 @@ export interface ThemeFiles {
   /** SVG file name (inside icons/) → file content. */
   icons: Map<string, string>;
   /**
-   * Base-theme fonts to copy next to our theme JSON. Icon fonts must live
-   * inside our theme directory — VS Code does not load @font-face sources
-   * that escape to another extension's install location.
+   * Base-theme assets (icon images and fonts) to copy next to our theme
+   * JSON. Everything must live inside our theme directory — VS Code does
+   * not reliably load resources from another extension's install location.
    */
   assets: AssetCopy[];
 }
@@ -171,46 +171,45 @@ function sortedRecord<T>(entries: Array<[string, T]>): Record<string, T> {
   return out;
 }
 
-function rewriteBaseThemePaths(
-  json: Record<string, unknown>,
-  prefix: string,
-): { theme: Record<string, unknown>; assets: AssetCopy[] } {
+/** `./../icons/foo.svg` → `icons_foo.svg`: flat, collision-free per source dir. */
+function sanitizeAssetName(p: string): string {
+  return p
+    .replace(/\\/g, "/")
+    .replace(/^(\.\.?\/)+/, "")
+    .replace(/[/:]/g, "_");
+}
+
+function rewriteBaseThemePaths(json: Record<string, unknown>): {
+  theme: Record<string, unknown>;
+  assets: AssetCopy[];
+} {
   const theme = JSON.parse(JSON.stringify(json)) as Record<string, unknown>;
   const assets: AssetCopy[] = [];
-  const rebase = (p: string): string => {
-    if (/^(?:[a-zA-Z]:[\\/]|\/)/.test(p)) {
-      return p; // already absolute
+  const seen = new Map<string, string>();
+  const relocate = (original: string, dir: "assets" | "fonts"): string => {
+    let local = seen.get(original);
+    if (!local) {
+      local = `${dir}/${sanitizeAssetName(original)}`;
+      seen.set(original, local);
+      assets.push({ from: original.replace(/^\.\//, ""), to: local });
     }
-    return `${prefix}/${p.replace(/^\.\//, "")}`;
+    return `./${local}`;
   };
   const defs = theme.iconDefinitions as Record<string, { iconPath?: string }> | undefined;
   if (defs) {
     for (const def of Object.values(defs)) {
       if (def && typeof def.iconPath === "string") {
-        def.iconPath = rebase(def.iconPath);
+        def.iconPath = relocate(def.iconPath, "assets");
       }
     }
   }
-  // Fonts are copied into our theme dir rather than referenced in place:
-  // @font-face sources pointing into another extension's directory fail to
-  // load, which renders every file icon as the same blank glyph.
   const fonts = theme.fonts as Array<{ src?: Array<{ path?: string }> }> | undefined;
   if (Array.isArray(fonts)) {
-    const seen = new Map<string, string>();
     for (const font of fonts) {
       for (const src of font?.src ?? []) {
-        if (!src || typeof src.path !== "string") {
-          continue;
+        if (src && typeof src.path === "string") {
+          src.path = relocate(src.path, "fonts");
         }
-        const original = src.path;
-        let local = seen.get(original);
-        if (!local) {
-          const base = original.replace(/\\/g, "/").split("/").pop() || "font";
-          local = `fonts/${seen.size}_${base}`;
-          seen.set(original, local);
-          assets.push({ from: original.replace(/^\.\//, ""), to: local });
-        }
-        src.path = `./${local}`;
       }
     }
   }
@@ -254,7 +253,7 @@ export function generateTheme(rules: ResolvedRule[], base?: BaseTheme): ThemeFil
   let theme: Record<string, unknown>;
   let assets: AssetCopy[] = [];
   if (base) {
-    const rewritten = rewriteBaseThemePaths(base.json, base.pathPrefix);
+    const rewritten = rewriteBaseThemePaths(base.json);
     theme = rewritten.theme;
     assets = rewritten.assets;
     theme.iconDefinitions = {

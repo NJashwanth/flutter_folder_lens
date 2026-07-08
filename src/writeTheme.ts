@@ -39,15 +39,15 @@ export function writeThemeFiles(themeDir: string, files: ThemeFiles, baseDir?: s
     writeIfChanged(path.join(iconsDir, name), svg);
   }
 
-  const wantedFonts = new Set<string>();
+  const wantedAssets = new Set<string>();
   for (const asset of files.assets) {
     const src = path.isAbsolute(asset.from) ? asset.from : path.resolve(baseDir ?? themeDir, asset.from);
     const dest = path.join(themeDir, asset.to);
-    wantedFonts.add(dest);
+    wantedAssets.add(dest);
     try {
       writeIfChanged(dest, fs.readFileSync(src));
     } catch {
-      // unreadable source font: skip; affected file icons degrade gracefully
+      // unreadable source asset: skip; affected icons degrade gracefully
     }
   }
 
@@ -57,10 +57,13 @@ export function writeThemeFiles(themeDir: string, files: ThemeFiles, baseDir?: s
       changed = true;
     }
   }
-  if (fs.existsSync(fontsDir)) {
-    for (const stale of fs.readdirSync(fontsDir)) {
-      const full = path.join(fontsDir, stale);
-      if (!wantedFonts.has(full)) {
+  for (const dir of [fontsDir, path.join(themeDir, "assets")]) {
+    if (!fs.existsSync(dir)) {
+      continue;
+    }
+    for (const stale of fs.readdirSync(dir)) {
+      const full = path.join(dir, stale);
+      if (!wantedAssets.has(full)) {
         fs.unlinkSync(full);
         changed = true;
       }

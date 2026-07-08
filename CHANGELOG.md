@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.2.3 — 2026-07-08
+
+- All base-theme assets (icon images, not just fonts) are now copied into the generated theme, making image-based bases like Material Icon Theme render reliably regardless of where the base extension lives.
+
 ## 0.2.2 — 2026-07-08
 
 - **Fix: file icons showed as identical blank glyphs** when the imported base theme uses an icon font (e.g. the default Seti). VS Code refuses `@font-face` sources that point into another extension's directory, so base-theme fonts are now copied into the generated theme and referenced locally.

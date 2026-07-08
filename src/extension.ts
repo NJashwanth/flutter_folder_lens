@@ -71,7 +71,7 @@ async function regenerate(context: vscode.ExtensionContext, options: RegenerateO
   let base: LoadedBaseTheme | undefined;
   const baseSetting = (config.get<string>("baseIconTheme", "auto") ?? "").trim();
   if (baseSetting) {
-    base = loadBaseTheme(context, baseSetting, themeDir);
+    base = loadBaseTheme(context, baseSetting);
     if (!base && baseSetting !== "auto") {
       void vscode.window.showWarningMessage(
         `Flutter Folder Lens: could not load base icon theme "${baseSetting}"; using the built-in base instead.`,
@@ -115,11 +115,7 @@ interface LoadedBaseTheme {
   dir: string;
 }
 
-function loadBaseTheme(
-  context: vscode.ExtensionContext,
-  setting: string,
-  themeDir: string,
-): LoadedBaseTheme | undefined {
+function loadBaseTheme(context: vscode.ExtensionContext, setting: string): LoadedBaseTheme | undefined {
   const candidates =
     setting === "auto"
       ? [
@@ -132,7 +128,7 @@ function loadBaseTheme(
     if (!themeId || themeId === THEME_ID) {
       continue;
     }
-    const loaded = readThemeById(themeId, themeDir);
+    const loaded = readThemeById(themeId);
     if (loaded) {
       return loaded;
     }
@@ -140,7 +136,7 @@ function loadBaseTheme(
   return undefined;
 }
 
-function readThemeById(themeId: string, themeDir: string): LoadedBaseTheme | undefined {
+function readThemeById(themeId: string): LoadedBaseTheme | undefined {
   for (const ext of vscode.extensions.all) {
     const themes = (ext.packageJSON?.contributes?.iconThemes ?? []) as Array<{ id?: string; path?: string }>;
     const match = themes.find((t) => t.id === themeId && typeof t.path === "string");
@@ -150,9 +146,7 @@ function readThemeById(themeId: string, themeDir: string): LoadedBaseTheme | und
     const themeFile = path.join(ext.extensionUri.fsPath, match.path as string);
     try {
       const json = JSON.parse(stripJsonComments(fs.readFileSync(themeFile, "utf8"))) as Record<string, unknown>;
-      const dir = path.dirname(themeFile);
-      const prefix = path.relative(themeDir, dir).split(path.sep).join("/");
-      return { theme: { json, pathPrefix: prefix }, dir };
+      return { theme: { json }, dir: path.dirname(themeFile) };
     } catch {
       return undefined;
     }

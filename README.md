@@ -60,7 +60,7 @@ Flutter Folder Lens only wants to own **folder** icons. By default (`"flutterFol
 "flutterFolderLens.baseIconTheme": ""                     // minimal built-in set only
 ```
 
-The base theme's extension must remain installed — its icons are referenced, not copied. Switching your icon theme to something else and back re-imports the new base automatically.
+The base theme's icons and fonts are copied into the generated theme so they always load; the base extension only needs to be installed when icons are (re)generated. Switching your icon theme to something else and back re-imports the new base automatically.
 
 ## How it works (and why a reload prompt)
 

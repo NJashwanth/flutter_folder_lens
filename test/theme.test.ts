@@ -147,19 +147,34 @@ describe("generateTheme (imported base theme)", () => {
       light: { folderNames: { src: "base_folder" } },
       fonts: [{ id: "f", src: [{ path: "./fonts/seti.woff", format: "woff" }] }],
     },
-    pathPrefix: "../../other-ext/theme",
   };
   const files = generateTheme(mergeRules([], true), base);
   const theme = JSON.parse(files.themeJson);
 
-  it("rewrites base icon paths relative to our theme directory", () => {
-    assert.equal(theme.iconDefinitions.base_folder.iconPath, "../../other-ext/theme/icons/folder.svg");
-    assert.equal(theme.iconDefinitions.base_file.iconPath, "../../other-ext/theme/icons/file.svg");
+  it("relocates every base asset (icons and fonts) into our theme dir", () => {
+    assert.equal(theme.iconDefinitions.base_folder.iconPath, "./assets/icons_folder.svg");
+    assert.equal(theme.iconDefinitions.base_file.iconPath, "./assets/icons_file.svg");
+    assert.equal(theme.fonts[0].src[0].path, "./fonts/fonts_seti.woff");
+    assert.deepEqual(files.assets, [
+      { from: "icons/folder.svg", to: "assets/icons_folder.svg" },
+      { from: "icons/file.svg", to: "assets/icons_file.svg" },
+      { from: "fonts/seti.woff", to: "fonts/fonts_seti.woff" },
+    ]);
   });
 
-  it("relocates base fonts into our theme dir and schedules the copy", () => {
-    assert.equal(theme.fonts[0].src[0].path, "./fonts/0_seti.woff");
-    assert.deepEqual(files.assets, [{ from: "fonts/seti.woff", to: "fonts/0_seti.woff" }]);
+  it("deduplicates repeated references to the same asset", () => {
+    const twice = generateTheme(mergeRules([], false), {
+      json: {
+        iconDefinitions: {
+          a: { iconPath: "./icons/x.svg" },
+          b: { iconPath: "./icons/x.svg" },
+        },
+      },
+    });
+    const t = JSON.parse(twice.themeJson);
+    assert.equal(t.iconDefinitions.a.iconPath, "./assets/icons_x.svg");
+    assert.equal(t.iconDefinitions.b.iconPath, "./assets/icons_x.svg");
+    assert.equal(twice.assets.length, 1);
   });
 
   it("keeps the base theme's generic folder/file and unrelated mappings", () => {
