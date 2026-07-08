@@ -152,10 +152,14 @@ describe("generateTheme (imported base theme)", () => {
   const files = generateTheme(mergeRules([], true), base);
   const theme = JSON.parse(files.themeJson);
 
-  it("rewrites base icon and font paths relative to our theme directory", () => {
+  it("rewrites base icon paths relative to our theme directory", () => {
     assert.equal(theme.iconDefinitions.base_folder.iconPath, "../../other-ext/theme/icons/folder.svg");
     assert.equal(theme.iconDefinitions.base_file.iconPath, "../../other-ext/theme/icons/file.svg");
-    assert.equal(theme.fonts[0].src[0].path, "../../other-ext/theme/fonts/seti.woff");
+  });
+
+  it("relocates base fonts into our theme dir and schedules the copy", () => {
+    assert.equal(theme.fonts[0].src[0].path, "./fonts/0_seti.woff");
+    assert.deepEqual(files.assets, [{ from: "fonts/seti.woff", to: "fonts/0_seti.woff" }]);
   });
 
   it("keeps the base theme's generic folder/file and unrelated mappings", () => {

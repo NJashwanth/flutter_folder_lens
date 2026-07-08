@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.2.2 — 2026-07-08
+
+- **Fix: file icons showed as identical blank glyphs** when the imported base theme uses an icon font (e.g. the default Seti). VS Code refuses `@font-face` sources that point into another extension's directory, so base-theme fonts are now copied into the generated theme and referenced locally.
+
 ## 0.2.1 — 2026-07-07
 
 - `flutterFolderLens.baseIconTheme` now defaults to `"auto"`: your previous icon theme (falling back to the built-in Seti) is imported as the base, so **file icons and unmatched folders keep their normal look** — only the Flutter-role folders change. Set it to `""` for the old minimal built-in set.

@@ -2,7 +2,7 @@
   "name": "flutter-folder-lens",
   "displayName": "Flutter Folder Lens",
   "description": "Flutter-aware file icon theme — colored, shape-based folder icons for screens, widgets, models, state management, services, tests and platform folders.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "JashwanthNeela",
   "license": "MIT",
   "icon": "images/icon.png",

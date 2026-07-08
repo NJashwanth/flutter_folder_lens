@@ -140,11 +140,25 @@ export interface BaseTheme {
   pathPrefix: string;
 }
 
+/** A binary asset to copy from the base theme's directory into ours. */
+export interface AssetCopy {
+  /** Source path, relative to the base theme's directory (or absolute). */
+  from: string;
+  /** Destination path, relative to our theme directory. */
+  to: string;
+}
+
 export interface ThemeFiles {
   /** Serialized theme JSON (stable formatting for byte-level idempotency). */
   themeJson: string;
   /** SVG file name (inside icons/) → file content. */
   icons: Map<string, string>;
+  /**
+   * Base-theme fonts to copy next to our theme JSON. Icon fonts must live
+   * inside our theme directory — VS Code does not load @font-face sources
+   * that escape to another extension's install location.
+   */
+  assets: AssetCopy[];
 }
 
 const ICON_DIR = "./icons";
@@ -157,8 +171,12 @@ function sortedRecord<T>(entries: Array<[string, T]>): Record<string, T> {
   return out;
 }
 
-function rewriteBaseThemePaths(json: Record<string, unknown>, prefix: string): Record<string, unknown> {
+function rewriteBaseThemePaths(
+  json: Record<string, unknown>,
+  prefix: string,
+): { theme: Record<string, unknown>; assets: AssetCopy[] } {
   const theme = JSON.parse(JSON.stringify(json)) as Record<string, unknown>;
+  const assets: AssetCopy[] = [];
   const rebase = (p: string): string => {
     if (/^(?:[a-zA-Z]:[\\/]|\/)/.test(p)) {
       return p; // already absolute
@@ -173,17 +191,30 @@ function rewriteBaseThemePaths(json: Record<string, unknown>, prefix: string): R
       }
     }
   }
+  // Fonts are copied into our theme dir rather than referenced in place:
+  // @font-face sources pointing into another extension's directory fail to
+  // load, which renders every file icon as the same blank glyph.
   const fonts = theme.fonts as Array<{ src?: Array<{ path?: string }> }> | undefined;
   if (Array.isArray(fonts)) {
+    const seen = new Map<string, string>();
     for (const font of fonts) {
       for (const src of font?.src ?? []) {
-        if (src && typeof src.path === "string") {
-          src.path = rebase(src.path);
+        if (!src || typeof src.path !== "string") {
+          continue;
         }
+        const original = src.path;
+        let local = seen.get(original);
+        if (!local) {
+          const base = original.replace(/\\/g, "/").split("/").pop() || "font";
+          local = `fonts/${seen.size}_${base}`;
+          seen.set(original, local);
+          assets.push({ from: original.replace(/^\.\//, ""), to: local });
+        }
+        src.path = `./${local}`;
       }
     }
   }
-  return theme;
+  return { theme, assets };
 }
 
 /**
@@ -221,8 +252,11 @@ export function generateTheme(rules: ResolvedRule[], base?: BaseTheme): ThemeFil
   }
 
   let theme: Record<string, unknown>;
+  let assets: AssetCopy[] = [];
   if (base) {
-    theme = rewriteBaseThemePaths(base.json, base.pathPrefix);
+    const rewritten = rewriteBaseThemePaths(base.json, base.pathPrefix);
+    theme = rewritten.theme;
+    assets = rewritten.assets;
     theme.iconDefinitions = {
       ...(theme.iconDefinitions as Record<string, unknown> | undefined),
       ...sortedRecord(defs),
@@ -271,5 +305,5 @@ export function generateTheme(rules: ResolvedRule[], base?: BaseTheme): ThemeFil
     };
   }
 
-  return { themeJson: JSON.stringify(theme, null, 2) + "\n", icons };
+  return { themeJson: JSON.stringify(theme, null, 2) + "\n", icons, assets };
 }

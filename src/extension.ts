@@ -68,7 +68,7 @@ async function regenerate(context: vscode.ExtensionContext, options: RegenerateO
   const rules = mergeRules(config.get("rules", []), config.get<boolean>("useDefaultRules", true));
   const themeDir = path.join(context.extensionUri.fsPath, "theme");
 
-  let base: BaseTheme | undefined;
+  let base: LoadedBaseTheme | undefined;
   const baseSetting = (config.get<string>("baseIconTheme", "auto") ?? "").trim();
   if (baseSetting) {
     base = loadBaseTheme(context, baseSetting, themeDir);
@@ -81,7 +81,7 @@ async function regenerate(context: vscode.ExtensionContext, options: RegenerateO
 
   let changed: boolean;
   try {
-    changed = writeThemeFiles(themeDir, generateTheme(rules, base));
+    changed = writeThemeFiles(themeDir, generateTheme(rules, base?.theme), base?.dir);
   } catch (err) {
     void vscode.window.showErrorMessage(`Flutter Folder Lens: failed to generate icons — ${String(err)}`);
     return;
@@ -109,11 +109,17 @@ async function regenerate(context: vscode.ExtensionContext, options: RegenerateO
  * Returns the parsed theme JSON plus the relative path prefix from our theme
  * dir to that theme's directory, so icon paths keep working.
  */
+interface LoadedBaseTheme {
+  theme: BaseTheme;
+  /** Directory of the base theme's JSON file — font sources resolve from here. */
+  dir: string;
+}
+
 function loadBaseTheme(
   context: vscode.ExtensionContext,
   setting: string,
   themeDir: string,
-): BaseTheme | undefined {
+): LoadedBaseTheme | undefined {
   const candidates =
     setting === "auto"
       ? [
@@ -134,7 +140,7 @@ function loadBaseTheme(
   return undefined;
 }
 
-function readThemeById(themeId: string, themeDir: string): BaseTheme | undefined {
+function readThemeById(themeId: string, themeDir: string): LoadedBaseTheme | undefined {
   for (const ext of vscode.extensions.all) {
     const themes = (ext.packageJSON?.contributes?.iconThemes ?? []) as Array<{ id?: string; path?: string }>;
     const match = themes.find((t) => t.id === themeId && typeof t.path === "string");
@@ -144,8 +150,9 @@ function readThemeById(themeId: string, themeDir: string): BaseTheme | undefined
     const themeFile = path.join(ext.extensionUri.fsPath, match.path as string);
     try {
       const json = JSON.parse(stripJsonComments(fs.readFileSync(themeFile, "utf8"))) as Record<string, unknown>;
-      const prefix = path.relative(themeDir, path.dirname(themeFile)).split(path.sep).join("/");
-      return { json, pathPrefix: prefix };
+      const dir = path.dirname(themeFile);
+      const prefix = path.relative(themeDir, dir).split(path.sep).join("/");
+      return { theme: { json, pathPrefix: prefix }, dir };
     } catch {
       return undefined;
     }
