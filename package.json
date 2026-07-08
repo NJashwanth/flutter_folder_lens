@@ -2,7 +2,7 @@
   "name": "flutter-folder-lens",
   "displayName": "Flutter Folder Lens",
   "description": "Flutter-aware file icon theme — colored, shape-based folder icons for screens, widgets, models, state management, services, tests and platform folders.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "JashwanthNeela",
   "license": "MIT",
   "icon": "images/icon.png",
@@ -120,8 +120,8 @@
         },
         "flutterFolderLens.baseIconTheme": {
           "type": "string",
-          "default": "",
-          "markdownDescription": "Icon theme to use as the base under the Flutter folder overrides. Empty = the built-in minimal set. `auto` = import the icon theme that was active before Flutter Folder Lens. Or any icon theme id (e.g. `material-icon-theme`, `vs-seti`). The base extension must stay installed."
+          "default": "auto",
+          "markdownDescription": "Icon theme to use as the base under the Flutter folder overrides, so file icons are not affected. `auto` (default) = the icon theme that was active before Flutter Folder Lens, falling back to the built-in Seti theme. Or any icon theme id (e.g. `material-icon-theme`, `vs-seti`); that extension must stay installed. Empty = a minimal built-in folder/file set."
         }
       }
     }

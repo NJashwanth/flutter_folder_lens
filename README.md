@@ -10,7 +10,7 @@
 1. Install the extension. On first run it offers to activate the icon theme.
 2. Or activate manually: **Preferences: File Icon Theme** → **Flutter Folder Lens** (this sets `workbench.iconTheme`).
 
-Because VS Code applies exactly one file icon theme at a time, Flutter Folder Lens must be your active icon theme for its icons to show. If you love your current theme, see [Using another theme as the base](#using-another-icon-theme-as-the-base).
+Because VS Code applies exactly one file icon theme at a time, Flutter Folder Lens must be your active icon theme for its icons to show. Don't worry about losing your current icons: by default your previous theme is imported as the base and only the Flutter folder icons are layered on top — see [File icons are not affected](#file-icons-are-not-affected).
 
 ## Default folder icons
 
@@ -50,15 +50,17 @@ Right-click any folder → **Flutter Folder Lens: Set Icon for Folder…**, pick
 
 Rules persist in your **user settings** (icon themes are global to the window, so workspace-scoped rules would thrash the shared theme when switching projects).
 
-## Using another icon theme as the base
+## File icons are not affected
 
-By default the theme ships a clean minimal file/folder icon set. To keep your favorite theme's file icons and only layer the Flutter folder icons on top:
+Flutter Folder Lens only wants to own **folder** icons. By default (`"flutterFolderLens.baseIconTheme": "auto"`) it imports whichever icon theme was active before you switched — Material Icon Theme, Seti, anything installed — as the base, and layers the Flutter folder icons on top. Your file icons (TypeScript, YAML, JSON, …) and any folders we don't have a rule for keep looking exactly as before. If no previous theme is found it falls back to VS Code's built-in Seti.
 
 ```jsonc
-"flutterFolderLens.baseIconTheme": "material-icon-theme"   // or "vs-seti", or "auto"
+"flutterFolderLens.baseIconTheme": "auto"                 // default: your previous theme
+"flutterFolderLens.baseIconTheme": "material-icon-theme"  // or pin an explicit theme id
+"flutterFolderLens.baseIconTheme": ""                     // minimal built-in set only
 ```
 
-`auto` imports whichever icon theme was active before you switched to Flutter Folder Lens. The base theme's extension must remain installed — its icons are referenced, not copied.
+The base theme's extension must remain installed — its icons are referenced, not copied. Switching your icon theme to something else and back re-imports the new base automatically.
 
 ## How it works (and why a reload prompt)
 
@@ -78,7 +80,7 @@ The extension generates the icon theme JSON and SVG files into its own installat
 | --- | --- | --- |
 | `flutterFolderLens.rules` | `[]` | Custom `{folderName, shape, color}` rules, merged over the defaults. |
 | `flutterFolderLens.useDefaultRules` | `true` | Apply the built-in Flutter conventions. |
-| `flutterFolderLens.baseIconTheme` | `""` | Base icon theme id, `"auto"`, or empty for the built-in minimal set. |
+| `flutterFolderLens.baseIconTheme` | `"auto"` | Base icon theme: `"auto"` (previous theme, Seti fallback), an explicit theme id, or empty for the built-in minimal set. |
 
 ## Migrating from 0.1.x
 

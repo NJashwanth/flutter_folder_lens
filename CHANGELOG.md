@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.2.1 — 2026-07-07
+
+- `flutterFolderLens.baseIconTheme` now defaults to `"auto"`: your previous icon theme (falling back to the built-in Seti) is imported as the base, so **file icons and unmatched folders keep their normal look** — only the Flutter-role folders change. Set it to `""` for the old minimal built-in set.
+- The base is re-imported automatically when you switch icon themes.
+
 ## 0.2.0 — 2026-07-07
 
 **Breaking: badges → real folder icons.** The extension is now a Flutter-aware file icon theme instead of a badge decorator.

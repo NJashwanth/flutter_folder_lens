@@ -32,9 +32,11 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration(CONFIG_SECTION)) {
         void regenerate(context, { announce: false });
-      }
-      if (e.affectsConfiguration("workbench.iconTheme")) {
+      } else if (e.affectsConfiguration("workbench.iconTheme")) {
+        // baseIconTheme:"auto" tracks the user's theme; re-bake the base so
+        // file icons keep following whatever theme they switch to.
         rememberBaseTheme(context);
+        void regenerate(context, { announce: false });
       }
     }),
     vscode.commands.registerCommand("flutterFolderLens.setIconForFolder", (uri?: vscode.Uri) =>
@@ -67,10 +69,10 @@ async function regenerate(context: vscode.ExtensionContext, options: RegenerateO
   const themeDir = path.join(context.extensionUri.fsPath, "theme");
 
   let base: BaseTheme | undefined;
-  const baseSetting = (config.get<string>("baseIconTheme", "") ?? "").trim();
+  const baseSetting = (config.get<string>("baseIconTheme", "auto") ?? "").trim();
   if (baseSetting) {
     base = loadBaseTheme(context, baseSetting, themeDir);
-    if (!base) {
+    if (!base && baseSetting !== "auto") {
       void vscode.window.showWarningMessage(
         `Flutter Folder Lens: could not load base icon theme "${baseSetting}"; using the built-in base instead.`,
       );
@@ -102,26 +104,37 @@ async function regenerate(context: vscode.ExtensionContext, options: RegenerateO
 }
 
 /**
- * Resolve a base icon theme by id ("auto" = the icon theme that was active
- * before ours). Returns the parsed theme JSON plus the relative path prefix
- * from our theme dir to that theme's directory, so icon paths keep working.
+ * Resolve a base icon theme ("auto" = the user's current/previous icon theme,
+ * falling back to VS Code's built-in Seti so files always keep proper icons).
+ * Returns the parsed theme JSON plus the relative path prefix from our theme
+ * dir to that theme's directory, so icon paths keep working.
  */
 function loadBaseTheme(
   context: vscode.ExtensionContext,
   setting: string,
   themeDir: string,
 ): BaseTheme | undefined {
-  let themeId = setting;
-  if (setting === "auto") {
-    const current = vscode.workspace.getConfiguration("workbench").get<string>("iconTheme");
-    themeId =
-      current && current !== THEME_ID
-        ? current
-        : (context.globalState.get<string>(STATE_LAST_BASE_THEME) ?? "");
+  const candidates =
+    setting === "auto"
+      ? [
+          vscode.workspace.getConfiguration("workbench").get<string>("iconTheme"),
+          context.globalState.get<string>(STATE_LAST_BASE_THEME),
+          "vs-seti",
+        ]
+      : [setting];
+  for (const themeId of candidates) {
+    if (!themeId || themeId === THEME_ID) {
+      continue;
+    }
+    const loaded = readThemeById(themeId, themeDir);
+    if (loaded) {
+      return loaded;
+    }
   }
-  if (!themeId || themeId === THEME_ID) {
-    return undefined;
-  }
+  return undefined;
+}
+
+function readThemeById(themeId: string, themeDir: string): BaseTheme | undefined {
   for (const ext of vscode.extensions.all) {
     const themes = (ext.packageJSON?.contributes?.iconThemes ?? []) as Array<{ id?: string; path?: string }>;
     const match = themes.find((t) => t.id === themeId && typeof t.path === "string");
