@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.2.4 — 2026-07-10
+
+- README: added a screenshot of the default folder icons in the Explorer (sample workspace).
+
 ## 0.2.3 — 2026-07-08
 
 - All base-theme assets (icon images, not just fonts) are now copied into the generated theme, making image-based bases like Material Icon Theme render reliably regardless of where the base extension lives.
