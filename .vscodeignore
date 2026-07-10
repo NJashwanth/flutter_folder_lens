@@ -12,6 +12,7 @@ node_modules/**
 tsconfig.json
 tsconfig.test.json
 images/icon.svg
+images/explorer.png
 images/README.md
 **/*.map
 **/*.vsix

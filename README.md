@@ -2,8 +2,8 @@
 
 **Make your Flutter project structure instantly scannable.** Flutter Folder Lens is a Flutter-aware **file icon theme**: folders like `screens`, `widgets`, `models`, `bloc`, `services`, `test` and the platform directories get distinct colored, shape-based icons in the Explorer — like Material Icon Theme, but built around Flutter conventions.
 
-<!-- TODO: capture images/demo.gif and restore: ![Flutter Folder Lens in action](images/demo.gif) -->
-> 📸 Demo GIF coming soon — activate the theme on any Flutter project to see the icons below in action.
+<img src="images/explorer.png" width="420" alt="Flutter Folder Lens icons in the VS Code Explorer: colored shape icons on screens, widgets, models, bloc, services, test and platform folders">
+
 
 ## Getting started
 
